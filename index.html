@@ -1,0 +1,321 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>カルテチェックPro 完全完成版</title>
+
+<style>
+:root{ --mainColor:#4dabf7; }
+
+body{font-family:sans-serif;padding:10px;background:#f7f9fc;}
+h2{text-align:center;}
+
+.tab button{
+  padding:10px;margin:3px;border:none;
+  border-radius:10px;background:var(--mainColor);color:white;
+}
+
+.card{
+  background:white;padding:12px;margin:10px 0;
+  border-radius:12px;box-shadow:0 2px 6px rgba(0,0,0,0.1);
+}
+
+.high{border-left:6px solid red;}
+.mid{border-left:6px solid orange;}
+.low{border-left:6px solid green;}
+
+input,textarea,select{
+  width:100%;margin:5px 0;padding:10px;
+  border-radius:10px;border:1px solid #ccc;
+}
+
+.dayBox{
+  display:inline-block;
+  width:40px;
+  text-align:center;
+  margin:2px;
+  padding:5px;
+  border-radius:6px;
+  cursor:pointer;
+}
+
+.done{background:#51cf66;color:white;}
+
+.colorBtn{
+  width:40px;height:40px;border-radius:50%;
+  border:none;margin:5px;
+}
+
+.checkItem{
+  display:block;
+  margin:8px 0;
+  padding:8px;
+  border-radius:8px;
+  background:#f1f3f5;
+}
+
+.miss{
+  background:#ffe3e3;
+}
+</style>
+</head>
+
+<body>
+
+<h2>カルテチェックPro 完全版</h2>
+
+<div class="tab">
+<button onclick="showTab('daily')">日次</button>
+<button onclick="showTab('monthly')">月次</button>
+<button onclick="showTab('list')">一覧</button>
+<button onclick="showTab('setting')">設定</button>
+</div>
+
+<!-- 日次 -->
+<div id="dailyTab">
+<input id="d_name" placeholder="患者名">
+<input type="date" id="d_date">
+<input id="d_nurse" placeholder="看護師">
+
+<select id="priority">
+<option value="low">通常</option>
+<option value="mid">注意</option>
+<option value="high">緊急</option>
+</select>
+
+<textarea id="d_check" placeholder="チェック項目"></textarea>
+<textarea id="d_progress" placeholder="経過"></textarea>
+
+<label><input type="checkbox" id="d_contacted"> 修正連絡</label>
+<label><input type="checkbox" id="d_confirmed"> 修正確認</label>
+<label><input type="checkbox" id="d_with"> 同行</label>
+
+<textarea id="d_note" placeholder="備考"></textarea>
+
+<h3>入力モード</h3>
+<label><input type="radio" name="mode" value="new"> 新規</label>
+<label><input type="radio" name="mode" value="continue"> 連続</label>
+
+<button onclick="saveDaily()">保存</button>
+
+<h3>確認チェック</h3>
+<div id="dailyCheck"></div>
+</div>
+
+<!-- 月次（ここ完全修正🔥） -->
+<div id="monthlyTab" style="display:none">
+<input id="m_name" placeholder="患者名">
+<input type="month" id="m_month">
+
+<h3>月次チェック（必須）</h3>
+
+<label class="checkItem" id="item_report">
+<input type="checkbox" id="m_report"> 報告書
+</label>
+
+<label class="checkItem" id="item_update">
+<input type="checkbox" id="m_update"> 計画書更新
+</label>
+
+<label class="checkItem" id="item_create">
+<input type="checkbox" id="m_create"> 計画書作成
+</label>
+
+<label class="checkItem" id="item_pressure">
+<input type="checkbox" id="m_pressure"> 褥瘡計画書
+</label>
+
+<button onclick="saveMonthly()">保存</button>
+
+<div id="monthlyList"></div>
+</div>
+
+<!-- 一覧 -->
+<div id="listTab" style="display:none">
+<div id="list"></div>
+</div>
+
+<!-- 設定 -->
+<div id="settingTab" style="display:none">
+<h3>テーマカラー</h3>
+
+<button class="colorBtn" style="background:#4dabf7" onclick="setColor('#4dabf7')"></button>
+<button class="colorBtn" style="background:#ff6b6b" onclick="setColor('#ff6b6b')"></button>
+<button class="colorBtn" style="background:#51cf66" onclick="setColor('#51cf66')"></button>
+
+<h3>入力モード</h3>
+<label><input type="radio" name="modeSetting" value="new"> 新規</label>
+<label><input type="radio" name="modeSetting" value="continue"> 連続</label>
+
+<br><br>
+<button onclick="clearData()" style="background:red;color:white">全削除</button>
+</div>
+
+<script>
+let dailyData=JSON.parse(localStorage.getItem("dailyData"))||[];
+let monthlyData=JSON.parse(localStorage.getItem("monthlyData"))||[];
+let editIndex=null;
+
+// 色
+let savedColor=localStorage.getItem("color");
+if(savedColor) document.documentElement.style.setProperty('--mainColor',savedColor);
+
+function setColor(c){
+  document.documentElement.style.setProperty('--mainColor',c);
+  localStorage.setItem("color",c);
+}
+
+// モード
+let mode=localStorage.getItem("mode")||"continue";
+setMode(mode);
+
+function setMode(m){
+  document.querySelectorAll("input[name='mode']").forEach(el=>el.checked=(el.value===m));
+  document.querySelectorAll("input[name='modeSetting']").forEach(el=>el.checked=(el.value===m));
+  localStorage.setItem("mode",m);
+}
+
+document.querySelectorAll("input[name='mode']").forEach(el=>el.onchange=()=>setMode(el.value));
+document.querySelectorAll("input[name='modeSetting']").forEach(el=>el.onchange=()=>setMode(el.value));
+
+// タブ
+function showTab(t){
+  ["daily","monthly","list","setting"].forEach(id=>{
+    document.getElementById(id+"Tab").style.display="none";
+  });
+  document.getElementById(t+"Tab").style.display="block";
+
+  if(t==="list") renderList();
+  if(t==="monthly") renderMonthly();
+}
+
+// 日次保存（そのまま）
+function saveDaily(){
+  let now=new Date();
+
+  let data={
+    name:d_name.value,
+    date:d_date.value,
+    nurse:d_nurse.value,
+    priority:priority.value,
+    check:d_check.value,
+    progress:d_progress.value,
+    contacted:d_contacted.checked,
+    confirmed:d_confirmed.checked,
+    with:d_with.checked,
+    note:d_note.value,
+    savedAt:now.toLocaleString()
+  };
+
+  if(editIndex!==null) dailyData[editIndex]=data;
+  else dailyData.push(data);
+
+  localStorage.setItem("dailyData",JSON.stringify(dailyData));
+  renderDailyCheck();
+  alert("保存OK");
+}
+
+// 🔥月次保存（ここ重要）
+function saveMonthly(){
+
+  let miss=[];
+
+  if(!m_report.checked) miss.push("報告書");
+  if(!m_update.checked) miss.push("計画書更新");
+  if(!m_create.checked) miss.push("計画書作成");
+  if(!m_pressure.checked) miss.push("褥瘡計画書");
+
+  document.querySelectorAll(".checkItem").forEach(el=>el.classList.remove("miss"));
+
+  if(miss.length>0){
+
+    if(!m_report.checked) item_report.classList.add("miss");
+    if(!m_update.checked) item_update.classList.add("miss");
+    if(!m_create.checked) item_create.classList.add("miss");
+    if(!m_pressure.checked) item_pressure.classList.add("miss");
+
+    alert("未チェック項目あり\n" + miss.join("\n"));
+    return;
+  }
+
+  monthlyData.push({
+    name:m_name.value,
+    month:m_month.value,
+    report:true,
+    update:true,
+    create:true,
+    pressure:true
+  });
+
+  localStorage.setItem("monthlyData",JSON.stringify(monthlyData));
+  renderMonthly();
+  alert("月次保存OK");
+}
+
+// 月次表示
+function renderMonthly(){
+  let html="";
+  monthlyData.forEach(m=>{
+    html+=`
+    <div class="card">
+    ${m.name} ${m.month}<br>
+    ✔ 報告書<br>
+    ✔ 計画書更新<br>
+    ✔ 計画書作成<br>
+    ✔ 褥瘡計画書
+    </div>`;
+  });
+  monthlyList.innerHTML=html;
+}
+
+// 日次チェック
+function renderDailyCheck(){
+  let html="";
+  for(let i=1;i<=31;i++){
+    html+=`<div class="dayBox">${i}</div>`;
+  }
+  dailyCheck.innerHTML=html;
+}
+
+// 一覧
+function renderList(){
+  let html="";
+  dailyData.forEach((d,i)=>{
+    html+=`
+    <div class="card ${d.priority}" onclick="loadDaily(${i})">
+    ${d.name} ${d.date}
+    <br><button onclick="event.stopPropagation();deleteDaily(${i})">削除</button>
+    </div>`;
+  });
+  list.innerHTML=html;
+}
+
+function loadDaily(i){
+  let d=dailyData[i];
+  showTab("daily");
+
+  d_name.value=d.name;
+  d_date.value=d.date;
+  d_nurse.value=d.nurse;
+  priority.value=d.priority;
+}
+
+function deleteDaily(i){
+  if(confirm("削除する？")){
+    dailyData.splice(i,1);
+    localStorage.setItem("dailyData",JSON.stringify(dailyData));
+    renderList();
+  }
+}
+
+function clearData(){
+  if(confirm("全削除する？")){
+    localStorage.clear();
+    location.reload();
+  }
+}
+</script>
+
+</body>
+</html>
